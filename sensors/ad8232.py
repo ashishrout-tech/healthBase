@@ -1,5 +1,6 @@
 import RPi.GPIO as GPIO
 import time
+from collections import deque
 
 class AD8232:
     """
@@ -30,8 +31,8 @@ class AD8232:
         GPIO.setup(self.lo_plus,  GPIO.IN)
         GPIO.setup(self.lo_minus, GPIO.IN)
 
-        # Signal buffer: list of (timestamp, voltage)
-        self._buffer = []
+        # Signal buffer: deque of (timestamp, voltage)
+        self._buffer = deque(maxlen=self.BUFFER_SIZE)
 
     def leads_attached(self):
         """Returns True if all electrodes are properly connected."""
@@ -51,10 +52,13 @@ class AD8232:
         Returns the voltage value."""
         v = self.read_voltage()
         self._buffer.append((time.monotonic(), v))
-        # Keep buffer at fixed size
-        if len(self._buffer) > self.BUFFER_SIZE:
-            self._buffer.pop(0)
         return v
+
+    def get_latest_voltage(self):
+        """Return the most recent voltage reading, or None."""
+        if not self._buffer:
+            return None
+        return self._buffer[-1][1]
 
     def buffer_seconds(self):
         """How many seconds of data are in the buffer."""
@@ -146,6 +150,37 @@ class AD8232:
         if len(rr) >= 3:
             return "Good"
         return "Weak — keep electrodes firm"
+
+    def get_all_metrics(self):
+        """Return all ECG metrics in one call (single peak detection pass)."""
+        result = {
+            "heart_rate": None, "hrv": None,
+            "rr_intervals": [], "quality": "Insufficient data",
+        }
+        peaks = self._detect_r_peaks()
+        if len(peaks) < 2:
+            return result
+
+        rr_sec = [peaks[i+1][0] - peaks[i][0] for i in range(len(peaks)-1)]
+        rr_ms  = [round(r * 1000, 1) for r in rr_sec]
+        result["rr_intervals"] = rr_ms
+
+        valid = [r for r in rr_sec if self.MIN_RR_SEC <= r <= self.MAX_RR_SEC]
+        if valid:
+            result["heart_rate"] = round(60.0 / (sum(valid) / len(valid)), 1)
+
+        if len(rr_ms) >= 2:
+            mean = sum(rr_ms) / len(rr_ms)
+            result["hrv"] = round((sum((r - mean)**2 for r in rr_ms) / len(rr_ms)) ** 0.5, 1)
+
+        if result["hrv"] is not None and result["hrv"] > 200:
+            result["quality"] = "Noisy — keep still"
+        elif len(rr_ms) >= 3:
+            result["quality"] = "Good"
+        else:
+            result["quality"] = "Weak — keep electrodes firm"
+
+        return result
 
     def cleanup(self):
         GPIO.cleanup()

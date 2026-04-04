@@ -134,23 +134,26 @@
 
   // ── Fetch metrics ──────────────────────────────────────
   async function fetchMetrics() {
-    try {
-      const m = await (await fetch('/api/metrics')).json();
+	try {
+	  const m = await (await fetch('/api/metrics')).json();
 
-      document.getElementById('ecgHr').innerHTML  = m.ecg_hr ? `${m.ecg_hr}<span class="unit">BPM</span>` : '---';
-      document.getElementById('ppgHr').innerHTML  = m.ppg_hr ? `${m.ppg_hr}<span class="unit">BPM</span>` : '---';
-      document.getElementById('spo2').innerHTML    = m.spo2   ? `${m.spo2}<span class="unit">%</span>`    : '---';
-      document.getElementById('hrv').innerHTML     = m.hrv    ? `${m.hrv}<span class="unit">ms</span>`    : '---';
-      document.getElementById('quality').textContent = m.quality || '---';
+	  document.getElementById('ecgHr').innerHTML  = m.ecg_hr ? `${m.ecg_hr}<span class="unit">BPM</span>` : '---';
+	  document.getElementById('ppgHr').innerHTML  = m.ppg_hr ? `${m.ppg_hr}<span class="unit">BPM</span>` : '---';
+	  document.getElementById('spo2').innerHTML    = m.spo2   ? `${m.spo2}<span class="unit">%</span>`    : '---';
+	  document.getElementById('hrv').innerHTML     = m.hrv    ? `${m.hrv}<span class="unit">ms</span>`    : '---';
+	  document.getElementById('quality').textContent = m.quality || '---';
 
-      const dot = document.getElementById('statusDot');
-      dot.style.background = m.leads ? '#22c55e' : '#ef4444';
+	  const dot = document.getElementById('statusDot');
+	  dot.style.background = m.leads ? '#22c55e' : '#ef4444';
 
-      if (!m.leads) {
-        document.getElementById('statusBar').innerHTML =
-          '<span class="lead-off">⚠ LEADS OFF — check electrode connections</span>';
-      }
-    } catch (_) {}
+	  const bar = document.getElementById('statusBar');
+	  if (!m.leads) {
+		bar.innerHTML =
+		  '<span class="lead-off">⚠ ECG LEADS OFF — check electrode connections</span>'
+		  + (m.ppg_hr ? ` · PPG HR: ${m.ppg_hr} BPM` : '')
+		  + (m.spo2   ? ` · SpO₂: ${m.spo2}%`       : '');
+	  }
+	} catch (_) {}
   }
 
   // ── Poll intervals ─────────────────────────────────────

@@ -1,5 +1,6 @@
 import smbus2
 import time
+from collections import deque
 
 class MAX30102:
     ADDRESS = 0x57
@@ -27,8 +28,8 @@ class MAX30102:
 
     def __init__(self, bus_number=1):
         self.bus = smbus2.SMBus(bus_number)
-        self._ir_buffer  = []
-        self._red_buffer = []
+        self._ir_buffer  = deque(maxlen=self.BUFFER_SIZE)
+        self._red_buffer = deque(maxlen=self.BUFFER_SIZE)
         self._setup()
 
     # ── Low-level I/O ────────────────────────────────────
@@ -159,18 +160,18 @@ class MAX30102:
         self._ir_buffer.append(ir)
         self._red_buffer.append(red)
 
-        # Keep buffer at fixed size (sliding window)
-        if len(self._ir_buffer) > target:
-            self._ir_buffer.pop(0)
-            self._red_buffer.pop(0)
-
         return len(self._ir_buffer) >= target
 
     def finger_detected(self):
         """Returns True if IR value indicates a finger is on the sensor."""
         if not self._ir_buffer:
             return False
-        return self._ir_buffer[-1] > self.MIN_IR_VALUE
+        if self._ir_buffer[-1] > self.MIN_IR_VALUE:
+            return True
+        # Finger removed — clear stale data
+        self._ir_buffer.clear()
+        self._red_buffer.clear()
+        return False
 
     def get_heart_rate(self):
         """Returns calculated BPM or None if not enough data / no finger."""

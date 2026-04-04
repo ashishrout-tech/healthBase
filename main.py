@@ -1,48 +1,8 @@
 import time
-from sensors.ads1115  import ADS1115
-from sensors.ad8232   import AD8232
-from sensors.max30102 import MAX30102
+from sensors import init_sensors
 
 # ── Initialize ────────────────────────────────────────────
-print("Initializing sensors...\n")
-
-adc   = None
-ecg   = None
-pulse = None
-
-try:
-    adc = ADS1115(bus_number=1)
-    print("  ADS1115  — OK")
-except Exception as e:
-    print(f"  ADS1115  — FAILED: {e}")
-
-if adc:
-    try:
-        ecg = AD8232(adc, lo_plus_pin=17, lo_minus_pin=27)
-        print("  AD8232   — OK")
-    except Exception as e:
-        print(f"  AD8232   — FAILED: {e}")
-else:
-    print("  AD8232   — SKIPPED (requires ADS1115)")
-
-try:
-    pulse = MAX30102(bus_number=1)
-    print("  MAX30102 — OK")
-except Exception as e:
-    print(f"  MAX30102 — FAILED: {e}")
-
-# ── Availability summary ─────────────────────────────────
-available = []
-if ecg:
-    available.append("ECG")
-if pulse:
-    available.append("HR/SpO2")
-
-if not available:
-    print("\nNo sensors available — nothing to collect. Exiting.")
-    exit(1)
-
-print(f"\nSensor system ready.  Active: {', '.join(available)}\n")
+adc, ecg, pulse = init_sensors()
 
 # ── Data loop ─────────────────────────────────────────────
 if ecg:
@@ -60,28 +20,33 @@ last_display = time.time()
 
 try:
     while True:
-        status = "  Sensors OK"
+        status    = "  Sensors OK"
+        leads_off = False
 
         # ── ECG sampling ──────────────────────────────────
         if ecg:
-            if not ecg.leads_attached():
-                print("  LEAD OFF — check electrode connections")
-                time.sleep(0.5)
-                last_display = time.time()
-                continue
-            ecg.record_sample()
+            try:
+                if not ecg.leads_attached():
+                    leads_off = True
+                else:
+                    ecg.record_sample()
+            except OSError:
+                leads_off = True
 
         sample += 1
 
         # ── MAX30102 sampling ─────────────────────────────
         ppg_hr_str = spo2_str = "---"
         if pulse:
-            ready = pulse.collect_samples()
-            if ready and pulse.finger_detected():
-                hr   = pulse.get_heart_rate()
-                spo2 = pulse.get_spo2()
-                ppg_hr_str = f"{hr} BPM" if hr   else "..."
-                spo2_str   = f"{spo2}%"  if spo2 else "..."
+            try:
+                ready = pulse.collect_samples()
+                if ready and pulse.finger_detected():
+                    hr   = pulse.get_heart_rate()
+                    spo2 = pulse.get_spo2()
+                    ppg_hr_str = f"{hr} BPM" if hr   else "..."
+                    spo2_str   = f"{spo2}%"  if spo2 else "..."
+            except OSError:
+                pass
 
         # ── Display (throttled) ───────────────────────────
         now = time.time()
@@ -91,17 +56,20 @@ try:
             if not ecg:
                 status = "  No ECG   "
                 volt_str = ecg_hr_str = hrv_str = quality_str = "N/A"
+            elif leads_off:
+                status      = "  LEAD OFF "
+                volt_str    = "---"
+                ecg_hr_str  = "---"
+                hrv_str     = "---"
+                quality_str = "Check electrodes"
             elif ecg.buffer_seconds() >= 1.0:
-                last_v   = ecg._buffer[-1][1]
-                volt_str = f"{last_v:>+8.4f} V"
+                last_v = ecg.get_latest_voltage()
+                volt_str = f"{last_v:>+8.4f} V" if last_v is not None else "---"
 
-                ecg_hr = ecg.get_heart_rate()
-                ecg_hr_str = f"{ecg_hr} BPM" if ecg_hr else "..."
-
-                hrv = ecg.get_hrv()
-                hrv_str = f"{hrv}" if hrv else "..."
-
-                quality_str = ecg.get_signal_quality()
+                m = ecg.get_all_metrics()
+                ecg_hr_str  = f"{m['heart_rate']} BPM" if m["heart_rate"] else "..."
+                hrv_str     = f"{m['hrv']}" if m["hrv"] else "..."
+                quality_str = m["quality"]
             else:
                 volt_str    = "buffering"
                 ecg_hr_str  = "..."
