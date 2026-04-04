@@ -70,6 +70,12 @@ class MAX30102:
 
     # ── Raw FIFO read ────────────────────────────────────
 
+    def _data_available(self):
+        """Check if new sample exists in FIFO."""
+        wr = self._read(self.REG_FIFO_WR_PTR)
+        rd = self._read(self.REG_FIFO_RD_PTR)
+        return wr != rd
+
     def _read_fifo(self):
         """Read one Red + IR sample from FIFO."""
         d = self.bus.read_i2c_block_data(self.ADDRESS, self.REG_FIFO_DATA, 6)
@@ -79,12 +85,13 @@ class MAX30102:
 
     # ── Signal processing ────────────────────────────────
 
-    def _detect_peaks(self, data, min_distance=10):
-        """Find local maxima in the IR signal for BPM calculation."""
+    def _detect_peaks(self, data, min_distance=10, threshold=0):
+        """Find local maxima above threshold in the IR signal."""
         peaks = []
         for i in range(1, len(data) - 1):
-            if data[i] > data[i - 1] and data[i] > data[i + 1]:
-                # Enforce minimum distance between peaks
+            if (data[i] > threshold
+                    and data[i] > data[i - 1]
+                    and data[i] > data[i + 1]):
                 if not peaks or (i - peaks[-1]) >= min_distance:
                     peaks.append(i)
         return peaks
@@ -99,10 +106,18 @@ class MAX30102:
         # Remove DC offset — work on AC component only
         ac_data = [v - mean_ir for v in ir_data]
 
-        # Shift back to positive for peak detection
-        shifted = [v + max(ac_data) for v in ac_data]
+        # Amplitude threshold — ignore noise below 40% of max AC
+        max_ac = max(ac_data)
+        if max_ac <= 0:
+            return None
+        threshold = max_ac * 0.4
 
-        peaks = self._detect_peaks(shifted, min_distance=int(sample_rate * 0.4))
+        # min_distance = 0.5s → caps at 120 BPM (covers exercise)
+        peaks = self._detect_peaks(
+            ac_data,
+            min_distance=int(sample_rate * 0.5),
+            threshold=threshold,
+        )
 
         if len(peaks) < 2:
             return None
@@ -113,7 +128,7 @@ class MAX30102:
         bpm = (sample_rate / avg_interval) * 60
 
         # Sanity check — valid HR range
-        if 40 <= bpm <= 180:
+        if 40 <= bpm <= 120:
             return round(bpm, 1)
         return None
 
@@ -155,6 +170,11 @@ class MAX30102:
         and HR/SpO2 can be calculated.
         """
         target = count or self.BUFFER_SIZE
+
+        # Only read when sensor has new data — avoids duplicates
+        if not self._data_available():
+            return len(self._ir_buffer) >= target
+
         red, ir = self._read_fifo()
 
         self._ir_buffer.append(ir)
