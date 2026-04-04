@@ -70,12 +70,6 @@ class MAX30102:
 
     # ── Raw FIFO read ────────────────────────────────────
 
-    def _data_available(self):
-        """Check if new sample exists in FIFO."""
-        wr = self._read(self.REG_FIFO_WR_PTR)
-        rd = self._read(self.REG_FIFO_RD_PTR)
-        return wr != rd
-
     def _read_fifo(self):
         """Read one Red + IR sample from FIFO."""
         d = self.bus.read_i2c_block_data(self.ADDRESS, self.REG_FIFO_DATA, 6)
@@ -112,10 +106,9 @@ class MAX30102:
             return None
         threshold = max_ac * 0.4
 
-        # min_distance = 0.5s → caps at 120 BPM (covers exercise)
         peaks = self._detect_peaks(
             ac_data,
-            min_distance=int(sample_rate * 0.5),
+            min_distance=int(sample_rate * 0.4),
             threshold=threshold,
         )
 
@@ -128,7 +121,7 @@ class MAX30102:
         bpm = (sample_rate / avg_interval) * 60
 
         # Sanity check — valid HR range
-        if 40 <= bpm <= 120:
+        if 40 <= bpm <= 180:
             return round(bpm, 1)
         return None
 
@@ -170,11 +163,6 @@ class MAX30102:
         and HR/SpO2 can be calculated.
         """
         target = count or self.BUFFER_SIZE
-
-        # Only read when sensor has new data — avoids duplicates
-        if not self._data_available():
-            return len(self._ir_buffer) >= target
-
         red, ir = self._read_fifo()
 
         self._ir_buffer.append(ir)
@@ -186,12 +174,7 @@ class MAX30102:
         """Returns True if IR value indicates a finger is on the sensor."""
         if not self._ir_buffer:
             return False
-        if self._ir_buffer[-1] > self.MIN_IR_VALUE:
-            return True
-        # Finger removed — clear stale data
-        self._ir_buffer.clear()
-        self._red_buffer.clear()
-        return False
+        return self._ir_buffer[-1] > self.MIN_IR_VALUE
 
     def get_heart_rate(self):
         """Returns calculated BPM or None if not enough data / no finger."""
