@@ -28,7 +28,7 @@ else:
 try:
     pulse = MAX30102(bus_number=1)
     print("  MAX30102 — OK")
-except RuntimeError as e:
+except Exception as e:
     print(f"  MAX30102 — FAILED: {e}")
 
 # ── Availability summary ─────────────────────────────────
