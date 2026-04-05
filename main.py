@@ -2,7 +2,7 @@ import time
 from sensors import init_sensors
 
 # ── Initialize ────────────────────────────────────────────
-adc, ecg, pulse = init_sensors()
+adc, ecg, pulse, temp_sensor = init_sensors()
 
 # ── Data loop ─────────────────────────────────────────────
 if ecg:

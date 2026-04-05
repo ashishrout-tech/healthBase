@@ -1,14 +1,15 @@
 from sensors.ads1115  import ADS1115
 from sensors.ad8232   import AD8232
 from sensors.max30102 import MAX30102
+from sensors.mlx90614 import MLX90614
 
 
 def init_sensors(bus_number=1, lo_plus_pin=17, lo_minus_pin=27):
     """Initialize all sensors with graceful fallback.
-    Returns (adc, ecg, pulse) - any may be None if init failed."""
+    Returns (adc, ecg, pulse, temp_sensor) - any may be None if init failed."""
     print("Initializing sensors...\n")
 
-    adc = ecg = pulse = None
+    adc = ecg = pulse = temp_sensor = None
 
     try:
         adc = ADS1115(bus_number=bus_number)
@@ -31,15 +32,23 @@ def init_sensors(bus_number=1, lo_plus_pin=17, lo_minus_pin=27):
     except Exception as e:
         print(f"  MAX30102 - FAILED: {e}")
 
+    try:
+        temp_sensor = MLX90614(bus_number=bus_number)
+    except Exception as e:
+        print(f"  MLX90614 - FAILED: {e}")
+
     available = []
     if ecg:
         available.append("ECG")
     if pulse:
         available.append("HR/SpO2")
+    if temp_sensor:
+        available.append("Temp")
 
     if not available:
         print("\nNo sensors available - nothing to collect. Exiting.")
-        exit(1)
+        import sys
+        sys.exit(1)
 
     print(f"\nSensor system ready.  Active: {', '.join(available)}\n")
-    return adc, ecg, pulse
+    return adc, ecg, pulse, temp_sensor

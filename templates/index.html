@@ -6,26 +6,36 @@
   <title>healthBase — Live ECG</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
+	* { margin: 0; padding: 0; box-sizing: border-box; }
+	body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
 
-    header { padding: 16px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #1a1a2e; }
-    header h1 { font-size: 1.2rem; font-weight: 600; }
-    header .dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+	header { padding: 16px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #1a1a2e; }
+	header h1 { font-size: 1.2rem; font-weight: 600; flex: 1; }
+	header .dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; animation: pulse 1.5s infinite; }
+	@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding: 16px 24px; }
-    .card { background: #12121c; border: 1px solid #1e1e30; border-radius: 10px; padding: 16px; text-align: center; }
-    .card .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 6px; }
-    .card .value { font-size: 1.6rem; font-weight: 700; }
-    .card .unit  { font-size: 0.75rem; color: #888; margin-left: 2px; }
+	/* Patient selector */
+	.patient-bar { padding: 12px 24px; background: #12121c; border-bottom: 1px solid #1e1e30; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+	.patient-bar label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: #888; }
+	.patient-bar select { background: #1e1e30; color: #e0e0e0; border: 1px solid #2a2a40; border-radius: 6px; padding: 8px 12px; font-size: 0.9rem; min-width: 220px; }
+	.patient-bar select:focus { outline: none; border-color: #22c55e; }
+	.cloud-badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 20px; font-weight: 600; }
+	.cloud-ok   { background: #064e3b; color: #34d399; }
+	.cloud-off  { background: #450a0a; color: #ef4444; }
+	.cloud-idle { background: #1e1e30; color: #888; }
 
-    .chart-box { margin: 8px 24px 24px; background: #12121c; border: 1px solid #1e1e30; border-radius: 10px; padding: 16px; }
-    .chart-box h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 10px; }
-    canvas { width: 100% !important; height: 300px !important; }
+	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; padding: 16px 24px; }
+	.card { background: #12121c; border: 1px solid #1e1e30; border-radius: 10px; padding: 16px; text-align: center; }
+	.card .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 6px; }
+	.card .value { font-size: 1.6rem; font-weight: 700; }
+	.card .unit  { font-size: 0.75rem; color: #888; margin-left: 2px; }
 
-    .status-bar { padding: 8px 24px; font-size: 0.75rem; color: #666; text-align: center; }
-    .lead-off { color: #ef4444; font-weight: 600; }
+	.chart-box { margin: 8px 24px 24px; background: #12121c; border: 1px solid #1e1e30; border-radius: 10px; padding: 16px; }
+	.chart-box h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 10px; }
+	canvas { width: 100% !important; height: 300px !important; }
+
+	.status-bar { padding: 8px 24px; font-size: 0.75rem; color: #666; text-align: center; }
+	.lead-off { color: #ef4444; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -35,26 +45,40 @@
   <h1>healthBase — Live ECG Monitor</h1>
 </header>
 
+<!-- Patient selector bar -->
+<div class="patient-bar">
+  <label>Patient:</label>
+  <select id="patientSelect">
+	<option value="">— Select a patient —</option>
+  </select>
+  <span id="patientName" style="font-weight:600; color:#e0e0e0;"></span>
+  <span class="cloud-badge cloud-idle" id="cloudBadge">☁ Cloud: idle</span>
+</div>
+
 <div class="cards">
   <div class="card">
-    <div class="label">ECG Heart Rate</div>
-    <div class="value" id="ecgHr">---</div>
+	<div class="label">ECG Heart Rate</div>
+	<div class="value" id="ecgHr">---</div>
   </div>
   <div class="card">
-    <div class="label">PPG Heart Rate</div>
-    <div class="value" id="ppgHr">---</div>
+	<div class="label">PPG Heart Rate</div>
+	<div class="value" id="ppgHr">---</div>
   </div>
   <div class="card">
-    <div class="label">SpO₂</div>
-    <div class="value" id="spo2">---</div>
+	<div class="label">SpO₂</div>
+	<div class="value" id="spo2">---</div>
   </div>
   <div class="card">
-    <div class="label">HRV (SDNN)</div>
-    <div class="value" id="hrv">---</div>
+	<div class="label">Temperature</div>
+	<div class="value" id="temp">---</div>
   </div>
   <div class="card">
-    <div class="label">Signal Quality</div>
-    <div class="value" id="quality" style="font-size:1rem">---</div>
+	<div class="label">HRV (SDNN)</div>
+	<div class="value" id="hrv">---</div>
+  </div>
+  <div class="card">
+	<div class="label">Signal Quality</div>
+	<div class="value" id="quality" style="font-size:1rem">---</div>
   </div>
 </div>
 
@@ -69,67 +93,100 @@
   // ── Chart setup ────────────────────────────────────────
   const ctx = document.getElementById('ecgChart').getContext('2d');
   const chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        data: [],
-        borderColor: '#22c55e',
-        borderWidth: 1.2,
-        pointRadius: 0,
-        tension: 0.3,
-        fill: false
-      }]
-    },
-    options: {
-      animation: false,
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          display: true,
-          title: { display: true, text: 'Time (s)', color: '#666' },
-          ticks: { color: '#555', maxTicksLimit: 10 },
-          grid: { color: '#1a1a2e' }
-        },
-        y: {
-          title: { display: true, text: 'Voltage (V)', color: '#666' },
-          ticks: { color: '#555' },
-          grid: { color: '#1a1a2e' }
-        }
-      },
-      plugins: { legend: { display: false } }
-    }
+	type: 'line',
+	data: {
+	  labels: [],
+	  datasets: [{
+		data: [],
+		borderColor: '#22c55e',
+		borderWidth: 1.2,
+		pointRadius: 0,
+		tension: 0.3,
+		fill: false
+	  }]
+	},
+	options: {
+	  animation: false,
+	  responsive: true,
+	  maintainAspectRatio: false,
+	  scales: {
+		x: {
+		  display: true,
+		  title: { display: true, text: 'Time (s)', color: '#666' },
+		  ticks: { color: '#555', maxTicksLimit: 10 },
+		  grid: { color: '#1a1a2e' }
+		},
+		y: {
+		  title: { display: true, text: 'Voltage (V)', color: '#666' },
+		  ticks: { color: '#555' },
+		  grid: { color: '#1a1a2e' }
+		}
+	  },
+	  plugins: { legend: { display: false } }
+	}
   });
 
-  const MAX_POINTS = 1200;   // match server ECG_WINDOW
+  const MAX_POINTS = 1200;
   let baseTime = null;
+
+  // ── Load patient list ──────────────────────────────────
+  async function loadPatients() {
+	try {
+	  const res = await fetch('/api/patients');
+	  const data = await res.json();
+	  const select = document.getElementById('patientSelect');
+	  if (data.success && data.patients) {
+		data.patients.forEach(p => {
+		  const opt = document.createElement('option');
+		  opt.value = JSON.stringify({ id: p.id, name: p.name });
+		  opt.textContent = `${p.name} (${p.id.substring(0, 8)}…)`;
+		  select.appendChild(opt);
+		});
+	  }
+	} catch (e) {
+	  console.error('Failed to load patients:', e);
+	}
+  }
+
+  document.getElementById('patientSelect').addEventListener('change', async function() {
+	if (!this.value) return;
+	const patient = JSON.parse(this.value);
+	try {
+	  await fetch('/api/select-patient', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(patient)
+	  });
+	  document.getElementById('patientName').textContent = '→ ' + patient.name;
+	} catch (e) {
+	  console.error('Failed to select patient:', e);
+	}
+  });
 
   // ── Fetch ECG waveform ─────────────────────────────────
   async function fetchECG() {
-    try {
-      const res = await fetch('/api/ecg');
-      const data = await res.json();
-      if (!data.length) return;
+	try {
+	  const res = await fetch('/api/ecg');
+	  const data = await res.json();
+	  if (!Array.isArray(data) || !data.length) return;
 
-      if (!baseTime) baseTime = data[0].t;
+	  if (!baseTime) baseTime = data[0].t;
 
-      chart.data.labels = data.map(d => ((d.t - baseTime) / 1000).toFixed(1));
-      chart.data.datasets[0].data = data.map(d => d.v);
+	  chart.data.labels = data.map(d => ((d.t - baseTime) / 1000).toFixed(1));
+	  chart.data.datasets[0].data = data.map(d => d.v);
 
-      // Trim to window
-      if (chart.data.labels.length > MAX_POINTS) {
-        chart.data.labels = chart.data.labels.slice(-MAX_POINTS);
-        chart.data.datasets[0].data = chart.data.datasets[0].data.slice(-MAX_POINTS);
-      }
+	  if (chart.data.labels.length > MAX_POINTS) {
+		chart.data.labels = chart.data.labels.slice(-MAX_POINTS);
+		chart.data.datasets[0].data = chart.data.datasets[0].data.slice(-MAX_POINTS);
+	  }
 
-      chart.update();
-      document.getElementById('statusBar').textContent =
-        `Showing ${data.length} samples · last update ${new Date().toLocaleTimeString()}`;
-    } catch (e) {
-      document.getElementById('statusBar').innerHTML =
-        '<span class="lead-off">Connection lost — retrying…</span>';
-    }
+	  chart.update();
+	  document.getElementById('statusBar').textContent =
+		`Showing ${data.length} samples · last update ${new Date().toLocaleTimeString()}`;
+	} catch (e) {
+	  document.getElementById('statusBar').innerHTML =
+		'<span class="lead-off">Connection lost — retrying…</span>';
+	}
   }
 
   // ── Fetch metrics ──────────────────────────────────────
@@ -137,15 +194,31 @@
 	try {
 	  const m = await (await fetch('/api/metrics')).json();
 
-	  document.getElementById('ecgHr').innerHTML  = m.ecg_hr ? `${m.ecg_hr}<span class="unit">BPM</span>` : '---';
-	  document.getElementById('ppgHr').innerHTML  = m.ppg_hr ? `${m.ppg_hr}<span class="unit">BPM</span>` : '---';
-	  document.getElementById('spo2').innerHTML    = m.spo2   ? `${m.spo2}<span class="unit">%</span>`    : '---';
-	  document.getElementById('hrv').innerHTML     = m.hrv    ? `${m.hrv}<span class="unit">ms</span>`    : '---';
+	  document.getElementById('ecgHr').innerHTML  = m.ecg_hr  ? `${m.ecg_hr}<span class="unit">BPM</span>`  : '---';
+	  document.getElementById('ppgHr').innerHTML  = m.ppg_hr  ? `${m.ppg_hr}<span class="unit">BPM</span>`  : '---';
+	  document.getElementById('spo2').innerHTML    = m.spo2    ? `${m.spo2}<span class="unit">%</span>`     : '---';
+	  document.getElementById('temp').innerHTML    = m.temperature ? `${m.temperature}<span class="unit">°C</span>` : '---';
+	  document.getElementById('hrv').innerHTML     = m.hrv     ? `${m.hrv}<span class="unit">ms</span>`     : '---';
 	  document.getElementById('quality').textContent = m.quality || '---';
 
+	  // Sensor status dot
 	  const dot = document.getElementById('statusDot');
 	  dot.style.background = m.leads ? '#22c55e' : '#ef4444';
 
+	  // Cloud badge
+	  const badge = document.getElementById('cloudBadge');
+	  if (!m.patient || !m.patient.id) {
+		badge.className = 'cloud-badge cloud-idle';
+		badge.textContent = '☁ Cloud: no patient selected';
+	  } else if (m.cloud && m.cloud.ok) {
+		badge.className = 'cloud-badge cloud-ok';
+		badge.textContent = '☁ Cloud: sending';
+	  } else {
+		badge.className = 'cloud-badge cloud-off';
+		badge.textContent = '☁ Cloud: disconnected';
+	  }
+
+	  // Lead-off warning in status bar
 	  const bar = document.getElementById('statusBar');
 	  if (!m.leads) {
 		bar.innerHTML =
@@ -157,8 +230,9 @@
   }
 
   // ── Poll intervals ─────────────────────────────────────
-  setInterval(fetchECG,     250);   // graph: 4 fps
-  setInterval(fetchMetrics, 2000);  // cards: every 2 s
+  loadPatients();
+  setInterval(fetchECG,     250);
+  setInterval(fetchMetrics, 2000);
   fetchECG();
   fetchMetrics();
 </script>
