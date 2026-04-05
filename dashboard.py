@@ -9,7 +9,7 @@ from flask import Flask, render_template, jsonify, request as flask_request
 from sensors import init_sensors
 
 # ── Configuration ─────────────────────────────────────────
-HEALTHIFY_URL   = "http://localhost:3000"   # Change to your Vercel URL for prod
+HEALTHIFY_URL   = "https://healthify-one-beige.vercel.app"   # Change to your Vercel URL for prod
 ECG_WINDOW      = 1200                       # 6 seconds of data at 200 Hz
 SEND_INTERVAL   = 1.0                        # seconds between POSTs to Healthify
 TEMP_INTERVAL   = 5.0                        # temperature reads (slow sensor)
